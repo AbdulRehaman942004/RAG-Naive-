@@ -1,30 +1,40 @@
-from openai import OpenAI
 import os
-from dotenv import load_dotenv
+from typing import List, Tuple
+
 import chromadb
+from dotenv import load_dotenv
+from openai import OpenAI
+
 
 client = chromadb.PersistentClient(path="chromadb_data")
 
-# get the existing collection
-collection = client.get_collection(name="Oxford-Guide-2022")
 
-load_dotenv()
+def run_rag_query(
+    user_query: str,
+    collection_name: str = "Oxford-Guide-2022",
+    n_results: int = 10,
+    model_name: str = "openai/gpt-oss-20b",
+) -> Tuple[str, List[str]]:
+    """Run the RAG query using the existing ChromaDB collection and Groq client."""
+    # get the existing collection
+    collection = client.get_collection(name=collection_name)
 
-client_groq = OpenAI(
-    api_key=os.environ.get("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1",
-)
+    load_dotenv()
 
-user_query = "How old is Oxford University?"
+    client_groq = OpenAI(
+        api_key=os.environ.get("GROQ_API_KEY"),
+        base_url="https://api.groq.com/openai/v1",
+    )
 
-context = collection.query(
-    query_texts=user_query,
-    n_results=10,
-)
+    context = collection.query(
+        query_texts=[user_query],
+        n_results=n_results,
+    )
 
-print(f" \n Context: {context['documents']}")
+    documents = context.get("documents") or []
+    context_chunks: List[str] = documents[0] if documents else []
 
-prompt = f"""
+    prompt = f"""
 You are an assistant that answers questions based on provided context.
 
 CONTEXT:
@@ -42,9 +52,17 @@ Instructions:
 Answer:
 """
 
-response = client_groq.responses.create(
-    input=prompt,
-    model="openai/gpt-oss-20b",
-)
+    response = client_groq.chat.completions.create(
+        model=model_name,
+        messages=[{"role": "user", "content": prompt}],
+    )
 
-print(f"\nResponse: {response.output_text}")
+    answer = response.choices[0].message.content or ""
+    return answer, context_chunks
+
+
+if __name__ == "__main__":
+    # Preserve original behaviour when run directly
+    answer, _ = run_rag_query("How old is Oxford University?")
+    print(f"\nResponse: {answer}")
+
