@@ -1,356 +1,172 @@
 ## RAG Naive – PDF Question Answering
 
-This project is a **minimal Retrieval-Augmented Generation (RAG)** pipeline built around a single PDF.  
-It:
-- **Extracts text** from a PDF (`extraction.py`)
-- **Indexes it in ChromaDB** (`ingestion.py`)
-- **Answers questions using Groq LLM** with context retrieved from ChromaDB (`generation.py`)
+A **minimal Retrieval-Augmented Generation (RAG)** pipeline over PDFs: upload a PDF, index it into ChromaDB, and ask questions answered by a Groq LLM using retrieved chunks.
 
-Everything is written in plain Python scripts so you can see each step clearly.
+- **Streamlit app** (`app.py`): Upload a PDF at runtime, index it into ChromaDB, then ask questions in the browser.
+- **CLI scripts**: Same pipeline from the command line—`extraction.py` → `ingestion.py` → `generation.py`.
 
 ---
 
 ## 1. Project Structure
 
-- **`extraction.py`**: Reads `Oxford-Guide-2022.pdf`, extracts all text, splits it into ~500‑character chunks, and exposes them as `text_list`.
-- **`ingestion.py`**: Creates (or reuses) a **persistent ChromaDB collection** and inserts all chunks from `text_list`.
-- **`generation.py`**:  
-  - Loads the ChromaDB collection  
-  - Retrieves the most relevant chunks for a user query  
-  - Sends a prompt with that context to the Groq LLM via the OpenAI client
-- **`requirements.txt`**: Python dependencies (ChromaDB, OpenAI client, PyPDF2, `python-dotenv`, etc.).
+| File | Role |
+|------|------|
+| **`app.py`** | Streamlit UI: upload PDF → index into ChromaDB → ask questions (uses `extraction`, `ingestion`, `generation`). |
+| **`extraction.py`** | PDF text extraction and chunking. Exposes `extract_pdf_to_chunks(path, size)` for files and `extract_bytes_to_chunks(file_bytes, size)` for uploads; defines `text_list` for CLI. |
+| **`ingestion.py`** | ChromaDB ingestion. Exposes `ingest_chunks_into_chromadb(chunks, collection_name)`; uses persistent client in `chromadb_data`. |
+| **`generation.py`** | RAG query. Exposes `run_rag_query(user_query, collection_name, n_results, model_name)`—retrieves chunks, builds prompt, calls Groq via OpenAI client (chat completions). |
+| **`requirements.txt`** | Dependencies: Streamlit, ChromaDB, OpenAI client, PyPDF2, python-dotenv, etc. |
 
-The Chroma database is stored on disk in the `chromadb_data` folder (created automatically).
+The Chroma database is stored in the **`chromadb_data`** folder (created automatically).
 
 ---
 
 ## 2. Prerequisites
 
-- **OS**: Windows 10 or later (tested on Windows 10)
-- **Python**: 3.10+ recommended
-- **Internet access**: Required to call the Groq API
-- **Groq API key**:
-  - You need a valid **`GROQ_API_KEY`** from Groq
+- **Python**: 3.10+
+- **OS**: Windows 10+ (tested on Windows 10)
+- **Internet**: Required for the Groq API
+- **Groq API key**: Get a valid **`GROQ_API_KEY`** from [Groq Console](https://console.groq.com)
 
 ---
 
-## 3. Setup Instructions (Step by Step)
+## 3. Setup
 
-### 3.1. Clone or download the project
+### 3.1. Project folder
 
-Place the project folder somewhere convenient, e.g.:
+Place the project somewhere convenient, e.g.:
 
 ```text
 c:\Users\DELL\Desktop\RAG\RAG Naive\
 ```
 
-Make sure the scripts (`extraction.py`, `ingestion.py`, `generation.py`) and `requirements.txt` are inside this folder.
-
-### 3.2. Place your PDF
-
-By default, `extraction.py` expects a file named:
-
-```text
-Oxford-Guide-2022.pdf
-```
-
-Steps:
-- Put your PDF file in the same folder as the scripts.
-- If your PDF has a **different name**, either:
-  - Rename the file to `Oxford-Guide-2022.pdf`, **or**
-  - Change the `pdf_path` variable in `extraction.py`:
-
-```python
-pdf_path = "your-file-name.pdf"
-```
-
-### 3.3. Create and activate a virtual environment (Windows, PowerShell)
-
-From the project folder:
+### 3.2. Virtual environment (PowerShell)
 
 ```powershell
 cd "c:\Users\DELL\Desktop\RAG\RAG Naive"
 
 python -m venv .venv
-
 .\.venv\Scripts\Activate.ps1
 ```
 
-You should now see `(.venv)` at the start of your PowerShell prompt.
+You should see `(.venv)` in the prompt.
 
-### 3.4. Install dependencies
-
-With the virtual environment activated:
+### 3.3. Install dependencies
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-This installs:
-- `PyPDF2` for PDF text extraction
-- `chromadb` for vector storage
-- `openai` client for talking to the Groq API
-- `python-dotenv` for loading environment variables
-- And other supporting libraries
+This installs Streamlit, ChromaDB, PyPDF2, the OpenAI client (for Groq), python-dotenv, and supporting packages.
 
-### 3.5. Configure your Groq API key
+### 3.4. Groq API key
 
-`generation.py` reads `GROQ_API_KEY` from a `.env` file using `python-dotenv`.
-
-1. In the project root (`RAG Naive`), create a file named `.env`.
-2. Add this line (replace the placeholder with your key):
+1. In the project root, create a file named **`.env`**.
+2. Add (replace with your key):
 
 ```text
 GROQ_API_KEY=your_real_groq_api_key_here
 ```
 
-3. Save the file.  
-
-> **Security tip**: Do not commit `.env` to version control; it should stay private.
+3. Save. Do not commit `.env` to version control.
 
 ---
 
-## 4. Running the Pipeline
+## 4. Running the app (recommended)
 
-Run the scripts **in this order**:
-
-1. **Extract text from the PDF**
-2. **Ingest chunks into ChromaDB**
-3. **Ask questions using the LLM**
-
-All commands below assume you are in:
+With the venv activated:
 
 ```powershell
-cd "c:\Users\DELL\Desktop\RAG\RAG Naive"
-.\.venv\Scripts\Activate.ps1
+streamlit run app.py
 ```
 
-### 4.1. Step 1 – Extract PDF text
+A browser tab opens (usually http://localhost:8501).
+
+1. **Index PDF**: Upload a PDF, set collection name and chunk size in the sidebar, click **Index PDF into ChromaDB**. The app extracts text, chunks it, and stores it in ChromaDB (replacing any existing collection with that name).
+2. **Ask Questions**: Type a question and click **Get Answer**. The app retrieves relevant chunks and returns an answer from the Groq LLM. Use the expander to see retrieved context.
+
+You can change **collection name**, **chunk size**, **number of chunks to retrieve**, and **Groq model** in the sidebar. If you get a 403 or “Permission denied”, try a model such as **`llama-3.1-8b-instant`** in the Groq model field.
+
+---
+
+## 5. Running the pipeline via CLI
+
+You can run the same pipeline from the command line.
+
+### 5.1. Optional: use a local PDF file
+
+For CLI, `extraction.py` reads a file path. Default is `Oxford-Guide-2022.pdf` in the project folder. To use another file, set it in `extraction.py`:
+
+```python
+pdf_path = "your-file.pdf"
+```
+
+### 5.2. Extract and ingest
 
 ```powershell
 python extraction.py
-```
-
-What this does:
-- Opens the PDF specified by `pdf_path`
-- Uses `PyPDF2.PdfReader` to iterate over all pages and call `extract_text()`
-- Concatenates all page text into a single string
-- Splits the text into chunks of ~500 characters:
-
-```python
-chunk_size = 500
-text_list = [full_text[i:i+chunk_size] for i in range(0, len(full_text), chunk_size)]
-```
-
-At the end, `text_list` is a list of string chunks that will be imported by `ingestion.py`.
-
-> You may see a printed slice of the chunks in the console (e.g., `text_list[100:103]`) just to verify extraction worked.
-
-### 4.2. Step 2 – Ingest chunks into ChromaDB
-
-```powershell
 python ingestion.py
 ```
 
-What this does:
-- Imports `text_list` from `extraction.py`
-- Creates a **persistent** ChromaDB client in `chromadb_data`:
+- **extraction.py**: Reads the PDF, extracts text, builds `text_list` (chunks of 500 characters by default). Prints a slice of chunks.
+- **ingestion.py**: Imports `text_list`, calls `ingest_chunks_into_chromadb(text_list)` into the default collection `Oxford-Guide-2022` (or adjust the collection name in the script). Prints a sample of stored chunks.
 
-```python
-client = chromadb.PersistentClient(path="chromadb_data")
-collection = client.create_collection(name="Oxford-Guide-2022")
-```
+### 5.3. Ask a question
 
-- Prepares:
-  - `chunks = text_list`
-  - `chunks_ids = [f"chunk_{i}" for i in range(len(chunks))]`
-- Adds all chunks to the ChromaDB collection:
-
-```python
-collection.add(
-    ids=chunks_ids,
-    documents=chunks
-)
-```
-
-- Optionally prints some chunk IDs and contents so you can visually inspect that ingestion worked.
-
-> **Note**: Because the client is **persistent**, the `chromadb_data` directory is created and reused automatically. You can shut down and rerun later without losing the index.
-
-### 4.3. Step 3 – Ask a question (RAG generation)
+Edit the query in `generation.py` if you want, then:
 
 ```powershell
 python generation.py
 ```
 
-What this does:
-- Connects to the same persistent ChromaDB:
-
-```python
-client = chromadb.PersistentClient(path="chromadb_data")
-collection = client.get_collection(name="Oxford-Guide-2022")
-```
-
-- Loads environment variables from `.env`:
-
-```python
-load_dotenv()
-```
-
-- Creates an OpenAI client **pointing to Groq’s API**:
-
-```python
-client_groq = OpenAI(
-    api_key=os.environ.get("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1",
-)
-```
-
-- Defines a **user query** (you can edit this in the script):
-
-```python
-user_query = "How old is Oxford University?"
-```
-
-- Queries ChromaDB for the most relevant chunks:
-
-```python
-context = collection.query(
-    query_texts=user_query,
-    n_results=10,
-)
-```
-
-- Builds a prompt that:
-  - Includes the retrieved context
-  - Instructs the model to:
-    - Answer using only the provided context
-    - Return `"I don't have this information yet."` if context is insufficient
-
-- Calls the Groq model:
-
-```python
-response = client_groq.responses.create(
-    input=prompt,
-    model="openai/gpt-oss-20b",
-)
-```
-
-- Prints:
-  - The retrieved context (for debugging)
-  - The final answer: `response.output_text`
-
-To ask **a different question**, just edit the `user_query` string in `generation.py` and rerun the script.
+- Loads the ChromaDB collection, runs `run_rag_query(...)`, prints the answer. Uses Groq via the OpenAI client (chat completions) and your `GROQ_API_KEY` from `.env`.
 
 ---
 
-## 5. Customization
+## 6. Customization
 
-### 5.1. Use a different PDF
-
-If you want to index another PDF:
-- Replace `Oxford-Guide-2022.pdf` with your own file
-- Or change the `pdf_path` variable in `extraction.py`
-- Rerun:
-  1. `python extraction.py`
-  2. `python ingestion.py`
-  3. `python generation.py`
-
-You may also want to:
-- Change the Chroma collection name in both `ingestion.py` and `generation.py` to match your document, e.g.:
-
-```python
-collection = client.create_collection(name="my-new-pdf")
-collection = client.get_collection(name="my-new-pdf")
-```
-
-### 5.2. Adjust chunk size
-
-In `extraction.py`, you can change:
-
-```python
-chunk_size = 500
-```
-
-Larger chunks:
-- Fewer items in Chroma
-- More context per chunk, but might be less precise
-
-Smaller chunks:
-- More fine‑grained retrieval
-- More items to store and retrieve
-
-After changing chunk size, rerun the full pipeline.
-
-### 5.3. Change the model
-
-`generation.py` currently uses:
-
-```python
-model="openai/gpt-oss-20b"
-```
-
-If your Groq account supports other models, you can plug in a different model name here.  
-Check Groq’s documentation for the list of available model IDs.
+- **Chunk size**: In the app (sidebar) or in `extraction.py` (`chunk_size = 500`). Larger = more context per chunk; smaller = finer-grained retrieval.
+- **Collection name**: In the app sidebar or in `ingestion.py` / `generation.py` when using CLI.
+- **Groq model**: In the app sidebar or in `generation.py` (`model_name=...`). Use a valid [Groq model ID](https://console.groq.com/docs/models), e.g. `llama-3.1-8b-instant`, `llama-3.1-70b-versatile`, `mixtral-8x7b-32768`.
 
 ---
 
-## 6. Troubleshooting
+## 7. Troubleshooting
 
-- **`FileNotFoundError` for the PDF**
-  - Confirm the PDF is in the project root.
-  - Confirm the `pdf_path` in `extraction.py` matches the file name exactly.
+- **403 / Permission denied / “Access denied. Check your network settings.”**  
+  - The app uses the **Chat Completions** API (`chat.completions.create`). If you still see 403, try:
+    - A known Groq model ID in the sidebar (e.g. `llama-3.1-8b-instant`).
+    - Checking API key and permissions at [Groq Console](https://console.groq.com).
+    - Network/proxy/firewall allowing access to `https://api.groq.com`.
 
-- **Chroma collection not found**
-  - Ensure you ran `ingestion.py` before `generation.py`.
-  - Make sure both scripts use the same collection name (`"Oxford-Guide-2022"` by default).
+- **Chroma collection not found**  
+  - Index a PDF first (app: Index PDF tab; CLI: run `ingestion.py`). Use the same collection name when asking questions.
 
-- **`GROQ_API_KEY` is None or unauthorized**
-  - Confirm `.env` exists in the project root.
-  - Confirm the line `GROQ_API_KEY=...` is correct (no quotes, no extra spaces).
-  - Ensure `python-dotenv` is installed and `load_dotenv()` is called before using the key.
+- **`GROQ_API_KEY` missing or invalid**  
+  - Ensure `.env` exists in the project root with `GROQ_API_KEY=your_key` (no quotes, no extra spaces). `load_dotenv()` is called in `generation.py`.
 
-- **Dependencies missing**
-  - Re-run:
+- **`FileNotFoundError` for PDF (CLI)**  
+  - Put the PDF in the project folder and set `pdf_path` in `extraction.py` to match the filename.
 
-```powershell
-pip install -r requirements.txt
-```
-
-- **Permission issues on Windows when activating venv**
-  - If PowerShell blocks script execution, you may need to relax the execution policy (as admin):
-
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-
-Then try activating the virtual environment again.
+- **PowerShell won’t run the venv script**  
+  - Run (as admin if needed):  
+    `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
 
 ---
 
-## 7. How This RAG Pipeline Works (Conceptual)
+## 8. How the RAG pipeline works
 
-- **Retrieval**:
-  - Converts your long PDF into many smaller text chunks.
-  - Uses **ChromaDB** to store and retrieve the most relevant chunks for a user query.
-- **Augmented Generation**:
-  - The retrieved chunks are inserted into the LLM prompt as **context**.
-  - The LLM is instructed to answer using only this context, avoiding hallucinations as much as possible.
+- **Retrieval**: PDF text is split into chunks and stored in ChromaDB. For each question, the most relevant chunks are retrieved.
+- **Augmented generation**: Those chunks are passed to the Groq LLM as context; the model is instructed to answer only from that context and to say “I don’t have this information yet.” when the context is insufficient.
 
-This is a **naive but clear** implementation, ideal for learning and experimentation. From here you can extend it with:
-- Better chunking (e.g., by sentences or headings instead of raw characters)
-- Embeddings-based similarity search with custom embedding models
-- A simple API or UI on top of `generation.py`
+This is a minimal, readable implementation suitable for learning and extension (e.g. better chunking, custom embeddings, or extra UI).
 
 ---
 
-## 8. Summary of Typical Workflow
+## 9. Summary
 
-1. **Set up environment**: create venv, install `requirements.txt`, configure `.env` with `GROQ_API_KEY`.
-2. **Prepare data**: place your PDF and adjust `pdf_path` if needed.
-3. **Run extraction**: `python extraction.py`.
-4. **Run ingestion**: `python ingestion.py`.
-5. **Ask questions**: edit `user_query` in `generation.py` and run `python generation.py`.
+1. **Setup**: Create venv, `pip install -r requirements.txt`, add `GROQ_API_KEY` to `.env`.
+2. **Run app**: `streamlit run app.py` → upload PDF in **Index PDF** → ask questions in **Ask Questions**.
+3. **Or use CLI**: Place PDF, set `pdf_path` in `extraction.py` → `python extraction.py` → `python ingestion.py` → edit query in `generation.py` → `python generation.py`.
 
-You now have a working, minimal RAG pipeline over a single PDF.
-
+You now have a working RAG pipeline: index a PDF (app or CLI) and ask questions against it.
