@@ -1,13 +1,9 @@
 import os
-
 import streamlit as st
 from dotenv import load_dotenv
-
 import generation
 
-
 load_dotenv()
-
 
 @st.cache_resource
 def get_chroma_client():
